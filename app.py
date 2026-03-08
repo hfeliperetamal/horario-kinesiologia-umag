@@ -36,6 +36,21 @@ def load_sheet_data():
         users = json.loads(vals[1]) if len(vals) > 1 and vals[1] else {}
     except:
         users = {}
+
+    # --- MIGRACIÓN AUTOMÁTICA: si el sheet no tiene users, leer desde users_db.json ---
+    if not users and os.path.exists("users_db.json"):
+        try:
+            with open("users_db.json", "r") as f:
+                local_users = json.load(f)
+            # Solo migrar entradas válidas (dicts con password y name)
+            for email, data in local_users.items():
+                if isinstance(data, dict) and "password" in data and "name" in data:
+                    users[email] = data
+            if users:
+                ws.update("B2", [[json.dumps(users)]])
+        except:
+            pass
+
     return reservas, users
 
 def save_reservas(data):
