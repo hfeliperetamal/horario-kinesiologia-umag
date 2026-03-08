@@ -54,10 +54,12 @@ def load_sheet_data():
     return reservas, users
 
 def save_reservas(data):
+    st.session_state._reservas_db = data  # caché inmediato para evitar race condition
     ws = get_gsheet()
     ws.update("A2", [[json.dumps(data)]])
 
 def save_users(data):
+    st.session_state._users_db = data  # caché inmediato
     ws = get_gsheet()
     ws.update("B2", [[json.dumps(data)]])
 
@@ -107,7 +109,15 @@ days_of_week = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado",
 def hash_pass(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-reservas_db, users_db = load_sheet_data()
+# Usar caché de session_state si existe (puesto por save_reservas/save_users)
+# Esto evita condición de carrera entre escritura y lectura en Google Sheets
+if '_reservas_db' in st.session_state and '_users_db' in st.session_state:
+    reservas_db = st.session_state._reservas_db
+    users_db = st.session_state._users_db
+else:
+    reservas_db, users_db = load_sheet_data()
+    st.session_state._reservas_db = reservas_db
+    st.session_state._users_db = users_db
 
 if "CADI" not in reservas_db: reservas_db["CADI"] = {}
 if "FACSA" not in reservas_db: reservas_db["FACSA"] = {}
@@ -379,6 +389,12 @@ else:
         st.header("🏢 " + ("CADI" if st.session_state.selected_lab == "CADI" else "Cs. de la Salud"))
         if st.button("🏠 Volver al Menú Principal", use_container_width=True):
             st.session_state.selected_lab = None
+            st.rerun()
+        if st.button("🔄 Actualizar datos", use_container_width=True):
+            # Forzar recarga desde Google Sheets
+            for k in ["_reservas_db", "_users_db"]:
+                if k in st.session_state:
+                    del st.session_state[k]
             st.rerun()
         st.divider()
         
