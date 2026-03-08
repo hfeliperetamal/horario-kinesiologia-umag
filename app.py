@@ -64,6 +64,11 @@ def save_users(data):
 # --- CONFIGURACIÓN DE ACCESO ---
 ADMIN_EMAIL = "felipe.retamal@umag.cl"
 
+# Auxiliares de laboratorio: email -> lab al que tienen acceso de admin
+LAB_ADMINS = {
+    "claudio.diaz@umag.cl": "FACSA"
+}
+
 ALLOWED_USERS = {
     "nelson.mcardle@umag.cl": "Nelson Mc Ardle Draguicevic",
     "alejandra.fernandez@umag.cl": "Alejandra Fernandez Elgueta",
@@ -81,7 +86,8 @@ ALLOWED_USERS = {
     "rene.hernandez@umag.cl": "René Hernández Delgado",
     "sebastian.almonacid@umag.cl": "Sebastián Almonacid",
     "pablo.rivera@umag.cl": "PABLO ANDRÉS RIVERA MIRANDA",
-    "natalia.suazo@umag.cl": "Natalia Alejandra Suazo Paredes"
+    "natalia.suazo@umag.cl": "Natalia Alejandra Suazo Paredes",
+    "claudio.diaz@umag.cl": "Claudio Díaz"
 }
 
 blocks = [
@@ -159,13 +165,17 @@ if not st.session_state.logged_in:
                 register_user(r_email, r_pass)
 else:
     @st.dialog("Confirmar Reservas")
-    def confirm_dialog(dates_to_book, blocks_to_book, actividad, allow_shared, max_extra):
+    def confirm_dialog(dates_to_book, blocks_to_book, actividad, allow_shared, max_extra, on_behalf_email=None, on_behalf_name=None):
         act_lab = st.session_state.selected_lab
         total = len(dates_to_book) * len(blocks_to_book)
+        owner_email = on_behalf_email or st.session_state.email
+        owner_name = on_behalf_name or st.session_state.name
         st.warning(f"Estás a punto de registrar **{total}** bloques horarios en el sistema.")
         st.write(f"- **Laboratorio:** {act_lab}")
         st.write(f"- **Días seleccionados:** {len(dates_to_book)}")
         st.write(f"- **Actividad:** {actividad}")
+        if on_behalf_name:
+            st.write(f"- **Reservando para:** {on_behalf_name}")
         if allow_shared:
             st.write(f"- **Modo:** Compartido (+{max_extra} docentes max)")
         else:
@@ -181,8 +191,8 @@ else:
                     reservas_db[act_lab][d_str] = {}
                 for b in blocks_to_book:
                     new_booking = {
-                        "display": f"{st.session_state.name} ({actividad})",
-                        "owner_email": st.session_state.email
+                        "display": f"{owner_name} ({actividad})",
+                        "owner_email": owner_email
                     }
                     if b not in reservas_db[act_lab][d_str]:
                         reservas_db[act_lab][d_str][b] = {
@@ -205,7 +215,15 @@ else:
     start_of_week = today - timedelta(days=today.weekday())
 
     is_admin = (st.session_state.email == ADMIN_EMAIL)
-    badge = "👑 Administrador" if is_admin else "👨‍🏫 Docente"
+    is_lab_admin = st.session_state.email in LAB_ADMINS
+    lab_admin_lab = LAB_ADMINS.get(st.session_state.email)  # lab al que tiene acceso de admin
+
+    if is_admin:
+        badge = "👑 Administrador"
+    elif is_lab_admin:
+        badge = "🔧 Auxiliar de Laboratorio"
+    else:
+        badge = "👨‍🏫 Docente"
 
     if 'selected_lab' not in st.session_state:
         st.session_state.selected_lab = None
@@ -369,7 +387,9 @@ else:
             del st.session_state.success_msg
             
         opciones_menu = ["Nueva Reserva", "Mis Reservas"]
-        if is_admin: opciones_menu.append("Panel de Administración")
+        # Admin global ve panel en cualquier lab; auxiliar solo en su lab asignado
+        if is_admin or (is_lab_admin and st.session_state.selected_lab == lab_admin_lab):
+            opciones_menu.append("Panel de Administración")
         opciones_menu.append("Cerrar Sesión")
         
         # Si venimos desde el recomendador, preseleccionar "Nueva Reserva"
@@ -425,6 +445,21 @@ else:
                 idx_fin = blocks.index(block_fin)
                 
                 actividad = st.text_input("Actividad Corta", placeholder="Ej: FDE, MIND fit")
+
+                # OPCIÓN: Reservar en nombre de un académico (solo para auxiliares y admin)
+                on_behalf_email = None
+                on_behalf_name = None
+                if is_admin or is_lab_admin:
+                    academicos_opciones = {"— Reservar para mí mismo —": None}
+                    academicos_opciones.update({name: email for email, name in ALLOWED_USERS.items()
+                                               if email != st.session_state.email and email not in LAB_ADMINS})
+                    selected_academico_name = st.selectbox(
+                        "👤 Reservar en nombre de:",
+                        options=list(academicos_opciones.keys())
+                    )
+                    if academicos_opciones[selected_academico_name] is not None:
+                        on_behalf_email = academicos_opciones[selected_academico_name]
+                        on_behalf_name = selected_academico_name
                 
                 # SHARING OPTIONS
                 st.write("Configuración de Laboratorio Compartido:")
@@ -473,7 +508,8 @@ else:
                                 st.write(f"...y {len(conflictos)-5} más.")
                             st.warning("Verifica el calendario. Si el laboratorio está exclusivo o lleno, no puedes sobreponer tu actividad.")
                         else:
-                            confirm_dialog(dates_to_book, blocks_to_book, actividad, allow_shared, max_extra)
+                            confirm_dialog(dates_to_book, blocks_to_book, actividad, allow_shared, max_extra,
+                                          on_behalf_email=on_behalf_email, on_behalf_name=on_behalf_name)
 
         elif modo == "Mis Reservas":
             act_lab = st.session_state.selected_lab
