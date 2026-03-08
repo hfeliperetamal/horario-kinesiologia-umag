@@ -1,0 +1,17 @@
+{
+    "CADI": {
+        "2026-03-11": {
+            "08:00 - 09:30": {
+                "shared": true,
+                "max_extra": 2,
+                "bookings": [
+                    {
+                        "display": "Felipe Retamal (Pilates)",
+                        "owner_email": "felipe.retamal@umag.cl"
+                    }
+                ]
+            }
+        }
+    },
+    "FACSA": {}
+}
