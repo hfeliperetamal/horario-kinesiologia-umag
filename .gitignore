@@ -1,0 +1,11 @@
+# Credenciales Google Cloud - NO subir a GitHub
+horario-laboratorio-*.json
+*.json.bak
+
+# Python
+__pycache__/
+*.pyc
+.env
+
+# macOS
+.DS_Store
